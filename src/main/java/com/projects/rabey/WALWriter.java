@@ -79,7 +79,12 @@ public class WALWriter implements AutoCloseable {
         this.fileOutputStream = new FileOutputStream(currentWalFilePath.toFile(), true);
         BufferedOutputStream bos = new BufferedOutputStream(fileOutputStream, BUFFER_SIZE);
         this.out = new DataOutputStream(bos);
-        this.totalWritten.set(0);
+
+        if (this.totalWritten == null) {
+            this.totalWritten = new AtomicLong(0);
+        } else {
+            this.totalWritten.set(0);
+        }
         System.out.println("Opened WAL file: " + currentWalFilePath.getFileName());
     }
 
