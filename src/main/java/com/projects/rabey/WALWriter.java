@@ -10,7 +10,7 @@ public class WALWriter implements AutoCloseable {
 
     private final Path walDirPath;
     private static final long MAX_WAL_SIZE = 64L * 1024L; // 64KB rollover threshold
-    private static final int BUFFER_SIZE = 64 * 1024; // 64KB buffer size
+    private static final int BUFFER_SIZE = 8 * 1024; // 8KB buffer size
     private AtomicLong totalWritten;
     private DataOutputStream out;
     private FileOutputStream fileOutputStream;

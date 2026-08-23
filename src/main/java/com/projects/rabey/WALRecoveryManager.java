@@ -13,11 +13,11 @@ import java.util.regex.Pattern;
 public class WALRecoveryManager {
 
     private final Path walDirPath;
-    private final LSMTree memTable;
+    private final StorageEngine storageEngine;
 
-    public WALRecoveryManager(Path walDirPath, LSMTree lsmTree) {
+    public WALRecoveryManager(Path walDirPath, StorageEngine storageEngine) {
         this.walDirPath = walDirPath;
-        this.memTable = lsmTree;
+        this.storageEngine = storageEngine;
     }
 
     public void RecoverData() {
@@ -28,18 +28,18 @@ public class WALRecoveryManager {
             }
 
             // Temporarily disable writing to WAL during state recovery
-            memTable.setWalEnabled(false);
+            storageEngine.setWalEnabled(false);
             try {
                 for (Path walPath : walFiles) {
                     try (WALReader reader = new WALReader(walPath)) {
                         WALRecord record;
                         while ((record = reader.readNext()) != null) {
-                            memTable.put(record.key(), record.value());
+                            storageEngine.put(record.key(), record.value());
                         }
                     }
                 }
             } finally {
-                memTable.setWalEnabled(true);
+                storageEngine.setWalEnabled(true);
             }
         } catch (IOException e) {
             throw new RuntimeException("Failed to recover from WAL", e);

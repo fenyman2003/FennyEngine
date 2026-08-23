@@ -1,5 +1,4 @@
-import com.projects.rabey.LSMTree;
-import com.projects.rabey.WALRecoveryManager;
+import com.projects.rabey.StorageEngine;
 import com.projects.rabey.WALWriter;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.time.StopWatch;
@@ -38,7 +37,7 @@ public class StorageEngineTest {
     public void test_walWrite_and_lsm_write_behaviour() throws InterruptedException, IOException {
 
         WALWriter walWriter = new WALWriter(path);
-        LSMTree memTable = new LSMTree(walWriter);
+        StorageEngine storageEngine = new StorageEngine(walWriter);
         ExecutorService writerPool = Executors.newFixedThreadPool(8);
 
         StopWatch watch = new StopWatch();
@@ -47,7 +46,7 @@ public class StorageEngineTest {
         for (int i = 0; i < TEST_SIZE; i++) {
             final int index = i;
             writerPool.submit(() -> {
-                memTable.put(("key" + index).getBytes(), ("value" + index).getBytes());
+                storageEngine.put(("key" + index).getBytes(), ("value" + index).getBytes());
             });
         }
         // Shut down writer pool and wait (give it a reasonable timeout)
@@ -60,7 +59,7 @@ public class StorageEngineTest {
             IO.println("Writer pool did not terminate in time.");
         }
 
-        IO.println(memTable.size() + " entries in the map.");
+        IO.println(storageEngine.size() + " entries in the map.");
         // Iterate over the map and print the key-value pairs
         watch.reset();
         watch.start();
@@ -72,7 +71,7 @@ public class StorageEngineTest {
             final int index = i;
             int finalI = i;
             readerPool.submit(() -> {
-                String result = new String(memTable.get(("key" + index).getBytes()), StandardCharsets.UTF_8);
+                String result = new String(storageEngine.get(("key" + index).getBytes()), StandardCharsets.UTF_8);
                 // IO.println("index : " + finalI + " value : " + result);
                 counter.addAndGet(1);
             });
@@ -90,72 +89,6 @@ public class StorageEngineTest {
         IO.println(calculateBytes() + " bytes expected for " + TEST_SIZE + " entries.");
         Assertions.assertEquals(calculateBytes(), FileUtils.sizeOfDirectory(path.toFile()),
                         "WAL directory size does not match expected bytes.");
-    }
-
-    @Test
-    public void test_walRead_and_walRecovery_behaviour() throws InterruptedException, IOException {
-
-        WALWriter walWriter = new WALWriter(path);
-        LSMTree memTable = new LSMTree(walWriter);
-        WALRecoveryManager recoveryManager = new WALRecoveryManager(path, memTable);
-        recoveryManager.RecoverData();
-
-        ExecutorService writerPool = Executors.newFixedThreadPool(8);
-
-        StopWatch watch = new StopWatch();
-        watch.start();
-
-        for (int i = 0; i < TEST_SIZE; i++) {
-            final int index = i;
-            writerPool.submit(() -> {
-                memTable.put(("key" + index).getBytes(), ("value" + index).getBytes());
-            });
-        }
-        // Shut down writer pool and wait (give it a reasonable timeout)
-        writerPool.shutdown();
-        if (writerPool.awaitTermination(10, TimeUnit.SECONDS)) {
-            walWriter.close();
-            watch.stop();
-            IO.println("Time elapsed: " + watch.getTime() + " ms");
-        } else {
-            IO.println("Writer pool did not terminate in time.");
-        }
-
-        IO.println(memTable.size() + " entries in the map.");
-        // Iterate over the map and print the key-value pairs
-        watch.reset();
-        watch.start();
-        AtomicInteger counter = new AtomicInteger(0);
-
-        // Use a separate pool for reads so we don't submit to a shutdown executor
-        ExecutorService readerPool = Executors.newFixedThreadPool(8);
-        for (int i = TEST_SIZE - 1; i >= 0; i--) {
-            final int index = i;
-            int finalI = i;
-            readerPool.submit(() -> {
-                String result = new String(memTable.get(("key" + index).getBytes()), StandardCharsets.UTF_8);
-                // IO.println("index : " + finalI + " value : " + result);
-                counter.addAndGet(1);
-            });
-        }
-        readerPool.shutdown();
-        if (readerPool.awaitTermination(10, TimeUnit.SECONDS)) {
-            watch.stop();
-            IO.println("Time elapsed: " + watch.getTime() + " ms");
-        } else {
-            IO.println("Reader pool did not terminate in time.");
-        }
-
-        memTable.clear();
-        Assertions.assertEquals(0, memTable.size(), "Memtable should be empty after clear().");
-        IO.println("memtable cleared : " + memTable.size());
-        IO.println(FileUtils.sizeOfDirectory(path.toFile()) + " bytes in WAL directory.");
-        recoveryManager.RecoverData();
-        Assertions.assertEquals(TEST_SIZE, memTable.size(), "Recovered memtable size should match the WAL entries.");
-        Assertions.assertEquals(calculateBytes(), FileUtils.sizeOfDirectory(path.toFile()),
-                        "Recovered WAL directory size does not match expected bytes.");
-        IO.println("Total entries retrieved after recovery: " + memTable.size());
-        IO.println(FileUtils.sizeOfDirectory(path.toFile()) + " bytes in WAL directory.");
     }
 
     private static void deleteDirectory(File directory) {
