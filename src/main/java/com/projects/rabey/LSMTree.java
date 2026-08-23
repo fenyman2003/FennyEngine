@@ -5,6 +5,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 public class LSMTree extends ConcurrentSkipListMap<byte[], byte[]> {
 
     private final WALWriter walWriter;
+    private boolean walEnabled = true;
 
     public LSMTree(WALWriter walWriter) {
         super(new ByteArrayComparator());
@@ -17,7 +18,9 @@ public class LSMTree extends ConcurrentSkipListMap<byte[], byte[]> {
             throw new IllegalArgumentException("Key cannot be null");
         }
         try {
-            this.walWriter.write(key, value);
+            if (walEnabled) {
+                this.walWriter.write(key, value);
+            }
         } catch (Exception e) {
             throw new RuntimeException("Failed to write to WAL", e);
         }
@@ -31,5 +34,9 @@ public class LSMTree extends ConcurrentSkipListMap<byte[], byte[]> {
             throw new IllegalArgumentException("Key must be a byte array");
 
         return super.get(key);
+    }
+
+    public void setWalEnabled(boolean b) {
+        this.walEnabled = b;
     }
 }

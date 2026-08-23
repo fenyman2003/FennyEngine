@@ -9,6 +9,7 @@
     <version>1.0-SNAPSHOT</version>
 
     <properties>
+        <maven.compiler.release>26</maven.compiler.release>
         <maven.compiler.source>26</maven.compiler.source>
         <maven.compiler.target>26</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -36,7 +37,12 @@
             <version>5.11.0</version>
             <scope>test</scope>
         </dependency>
-
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.38</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -60,12 +66,19 @@
                 </configuration>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <source>25</source>
-                    <target>25</target>
-                </configuration>
+               <groupId>org.apache.maven.plugins</groupId>
+               <artifactId>maven-compiler-plugin</artifactId>
+               <version>3.14.0</version>
+               <configuration>
+                   <release>${maven.compiler.release}</release>
+                   <source>${maven.compiler.source}</source>
+                   <target>${maven.compiler.target}</target>
+               </configuration>
+            </plugin>
+            <plugin>
+               <groupId>org.apache.maven.plugins</groupId>
+               <artifactId>maven-surefire-plugin</artifactId>
+               <version>3.5.2</version>
             </plugin>
         </plugins>
     </build>

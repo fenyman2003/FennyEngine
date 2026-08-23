@@ -10,5 +10,8 @@ public class StorageEngine {
         Path path = Paths.get("wal");
         WALWriter walWriter = new WALWriter(path);
         LSMTree memTable = new LSMTree(walWriter);
+        WALRecoveryManager recoveryManager = new WALRecoveryManager(path, memTable);
+        recoveryManager.RecoverData();
+        IO.println(memTable.size() + " entries in the map after recovery.");
     }
 }
