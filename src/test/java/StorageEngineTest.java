@@ -1,3 +1,5 @@
+import com.projects.rabey.SSTTableReaderManager;
+import com.projects.rabey.SSTTableWriter;
 import com.projects.rabey.StorageEngine;
 import com.projects.rabey.WALWriter;
 import org.apache.commons.io.FileUtils;
@@ -17,27 +19,30 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class StorageEngineTest {
 
     private static final int TEST_SIZE = 100000;
-    private static Path path = Paths.get("src/test/resources/wal");
+    private static Path walPath = Paths.get("src/test/resources/wal");
+    private static Path sstablePath = Paths.get("src/test/resources/sstable");
 
     @BeforeEach
     public void init() throws IOException {
-        File file = path.toFile();
+        File file = walPath.toFile();
         deleteDirectory(file);
-        IO.println(path.toAbsolutePath().toString());
+        IO.println(walPath.toAbsolutePath().toString());
     }
 
     @AfterAll
     public static void postAll() throws IOException {
-        File file = path.toFile();
-        deleteDirectory(path.toFile());
-        IO.println(path.toAbsolutePath().toString());
+        File file = walPath.toFile();
+        deleteDirectory(walPath.toFile());
+        IO.println(walPath.toAbsolutePath().toString());
     }
 
     @Test
     public void test_walWrite_and_lsm_write_behaviour() throws InterruptedException, IOException {
 
-        WALWriter walWriter = new WALWriter(path);
-        StorageEngine storageEngine = new StorageEngine(walWriter);
+        WALWriter walWriter = new WALWriter(walPath);
+        SSTTableWriter sstTableWriter = new SSTTableWriter(sstablePath);
+        SSTTableReaderManager sstTableReaderManager = new SSTTableReaderManager(sstablePath);
+        StorageEngine storageEngine = new StorageEngine(walWriter, sstTableWriter, sstTableReaderManager);
         ExecutorService writerPool = Executors.newFixedThreadPool(8);
 
         StopWatch watch = new StopWatch();
@@ -71,7 +76,11 @@ public class StorageEngineTest {
             final int index = i;
             int finalI = i;
             readerPool.submit(() -> {
-                String result = new String(storageEngine.get(("key" + index).getBytes()), StandardCharsets.UTF_8);
+                try {
+                    String result = new String(storageEngine.get(("key" + index).getBytes()), StandardCharsets.UTF_8);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
                 // IO.println("index : " + finalI + " value : " + result);
                 counter.addAndGet(1);
             });
@@ -85,9 +94,9 @@ public class StorageEngineTest {
         }
 
         IO.println("Total entries retrieved: " + counter.get());
-        IO.println(FileUtils.sizeOfDirectory(path.toFile()) + " bytes in WAL directory.");
+        IO.println(FileUtils.sizeOfDirectory(walPath.toFile()) + " bytes in WAL directory.");
         IO.println(calculateBytes() + " bytes expected for " + TEST_SIZE + " entries.");
-        Assertions.assertEquals(calculateBytes(), FileUtils.sizeOfDirectory(path.toFile()),
+        Assertions.assertEquals(calculateBytes(), FileUtils.sizeOfDirectory(walPath.toFile()),
                         "WAL directory size does not match expected bytes.");
     }
 

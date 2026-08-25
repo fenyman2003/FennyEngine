@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 public class Main {
     public static void main(String[] args) throws Exception {
         Path walPath = Paths.get("src/main/resources/wal");
+        Path sstablePath = Paths.get("src/main/resources/sstable");
 
         // 1. Clean up any previous test WAL file
         File file = walPath.toFile();
@@ -20,9 +21,14 @@ public class Main {
 
         // 2. Initialize the storage engine with low threshold for testing
         WALWriter walWriter = new WALWriter(walPath);
-        StorageEngine engine = new StorageEngine(walWriter);
+        SSTTableWriter sstTableWriter = new SSTTableWriter(sstablePath);
+        SSTTableReaderManager sstTableReaderManager = new SSTTableReaderManager(sstablePath);
+        StorageEngine engine = new StorageEngine(walWriter, sstTableWriter, sstTableReaderManager);
 
-        int totalWrites = 10_000;
+        // WALRecoveryManager recoveryManager = new WALRecoveryManager(walPath, engine);
+        // recoveryManager.RecoverData();
+
+        int totalWrites = 10_000_000; // 10 Million writes
         int threadCount = 8;
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 

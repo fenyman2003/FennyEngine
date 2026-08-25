@@ -1,5 +1,7 @@
 package com.projects.rabey;
 
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -22,5 +24,9 @@ public class MemTable {
 
     public long getEntryCount() {
         return map.size();
+    }
+
+    public Set<Map.Entry<byte[], byte[]>> getEntries() {
+        return map.entrySet();
     }
 }
