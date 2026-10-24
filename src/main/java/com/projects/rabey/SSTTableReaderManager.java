@@ -3,8 +3,6 @@ package com.projects.rabey;
 import java.io.IOException;
 import java.nio.file.Path;
 
-import static com.projects.rabey.SSTTableWriter.sstableDirPath;
-
 public class SSTTableReaderManager {
 
     private final Path sstableDirPath;
@@ -13,8 +11,7 @@ public class SSTTableReaderManager {
         this.sstableDirPath = sstableDirPath;
     }
 
-    public synchronized byte[] get(byte[] searchKey) throws IOException {
-        int currentIndex = SSTTableWriter.findNextIndex(sstableDirPath) - 1;
+    public byte[] get(byte[] searchKey, int currentIndex) throws IOException {
         for (int i = currentIndex; i >= 1; i--) {
             try (SSTTableReader reader = new SSTTableReader(getSSTableFileName(i))) {
                 byte[] result = reader.pointSearch(searchKey);

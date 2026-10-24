@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class StorageEngine {
 
@@ -13,15 +14,24 @@ public class StorageEngine {
     private boolean walEnabled = true;
     private volatile MemTable activeMemTable = new MemTable();
     private final ConcurrentLinkedDeque<MemTable> immutableMemTables = new ConcurrentLinkedDeque<>();
-    public static final int FLUSH_THRESHOLD_BYTES = 64 * 1024 * 1024; // 64MB
+    private static final long DEFAULT_FLUSH_THRESHOLD_BYTES = 64L * 1024L * 1024L; // 64MB
+    private final long flushThresholdBytes;
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final SSTTableWriter SSTableWriter;
 
+    // default constructor keeps previous behavior
     public StorageEngine(WALWriter walWriter, SSTTableWriter SSTableWriter,
                     SSTTableReaderManager sstTableReaderManager) {
+        this(walWriter, SSTableWriter, sstTableReaderManager, DEFAULT_FLUSH_THRESHOLD_BYTES);
+    }
+
+    // new constructor to allow tests to set a lower flush threshold
+    public StorageEngine(WALWriter walWriter, SSTTableWriter SSTableWriter, SSTTableReaderManager sstTableReaderManager,
+                    long flushThresholdBytes) {
         this.walWriter = walWriter;
         this.SSTableWriter = SSTableWriter;
         this.sstTableReaderManager = sstTableReaderManager;
+        this.flushThresholdBytes = flushThresholdBytes;
     }
 
     public void put(byte[] key, byte[] value) {
@@ -37,16 +47,16 @@ public class StorageEngine {
         }
 
         long currentSize = activeMemTable.put(key, value);
-        if (currentSize >= FLUSH_THRESHOLD_BYTES) {
+        if (currentSize >= flushThresholdBytes) {
             rotateMemTableIfNeeded();
             flushImmutableMemTables();
         }
     }
 
     private void rotateMemTableIfNeeded() {
-        if (activeMemTable.getByteSize() >= FLUSH_THRESHOLD_BYTES) {
+        if (activeMemTable.getByteSize() >= flushThresholdBytes) {
             synchronized (rotationLock) {
-                if (activeMemTable.getByteSize() >= FLUSH_THRESHOLD_BYTES) {
+                if (activeMemTable.getByteSize() >= flushThresholdBytes) {
                     MemTable oldTable = activeMemTable;
                     activeMemTable = new MemTable(); // Active table swapped instantly
                     immutableMemTables.addFirst(oldTable); // Immutable table safely preserved
@@ -88,7 +98,7 @@ public class StorageEngine {
                 return val;
         }
         try {
-            val = sstTableReaderManager.get((byte[]) key);
+            val = sstTableReaderManager.get((byte[]) key, SSTableWriter.getSSTableFileIndex());
             return val;
         } catch (IOException e) {
             throw new RuntimeException("Failed to load SSTable readers", e);

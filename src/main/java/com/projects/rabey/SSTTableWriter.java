@@ -7,17 +7,17 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class SSTTableWriter implements AutoCloseable {
 
     public static Path sstableDirPath = null;
-    private static final long MAX_SSTABLE_SIZE = 64L * 1024L; // 64KB rollover threshold
     private static final int BUFFER_SIZE = 8 * 1024; // 8KB buffer size
     private DataOutputStream out;
     private FileOutputStream fileOutputStream;
-    private int currentIndex;
+    private AtomicInteger currentIndex = new AtomicInteger(0);
 
     // Construct with directory where sstable files (sstable_0001, sstable_0002...)
     // are stored
@@ -26,7 +26,7 @@ public class SSTTableWriter implements AutoCloseable {
         if (!Files.exists(sstableDirPath)) {
             Files.createDirectories(sstableDirPath);
         }
-        this.currentIndex = findNextIndex(sstableDirPath);
+        this.currentIndex.set(findNextIndex(sstableDirPath));
     }
 
     // Append key length | value length | key | value to the SSTable file
@@ -95,7 +95,11 @@ public class SSTTableWriter implements AutoCloseable {
             throw new IOException("Failed to close SSTable file during rotation", e);
         }
         openNewSSTTableFile();
-        currentIndex++;
+        currentIndex.addAndGet(1);
+    }
+
+    public int getSSTableFileIndex(){
+        return this.currentIndex.get();
     }
 
     @Override

@@ -1,12 +1,15 @@
 package com.projects.rabey;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
+import java.io.EOFException;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Arrays;
-
-import static com.projects.rabey.SSTTableWriter.sstableDirPath;
 
 public class SSTTableReader implements AutoCloseable {
+
+    private static final ByteArrayComparator KEY_COMPARATOR = new ByteArrayComparator();
 
     private final FileInputStream fileInputStream;
     private final DataInputStream in;
@@ -17,59 +20,50 @@ public class SSTTableReader implements AutoCloseable {
         this.in = new DataInputStream(bufferedInputStream);
     }
 
-    public synchronized byte[] search(byte[] searchKey, int searchKeyLength) throws IOException {
+    /**
+     * Sequential scan over the sorted SSTable records.
+     * Stops as soon as a record key strictly greater than {@code searchKey} is
+     * encountered (records are ordered), or on clean EOF.
+     *
+     * @return the matching value, or {@code null} if the key is absent.
+     */
+    public byte[] search(byte[] searchKey, int searchKeyLength) throws IOException {
         int keyLength;
         int valueLength;
-        try {
-            // Reaching EOF cleanly on the first read indicates end-of-file
-            keyLength = in.readInt();
-            if (keyLength != searchKeyLength) {
-                // Skip the value length and the key-value pair if lengths don't match
-                valueLength = in.readInt(); // Read value length
-                in.skipBytes(keyLength + valueLength); // Skip key and value
-                return null; // Key not found
+        int cmp;
+        while (true) {
+            try {
+                keyLength = in.readInt();
+            } catch (EOFException e) {
+                return null; // Normal end of file
             }
-        } catch (EOFException e) {
-            return null; // Normal end of log file
-        }
 
-        try {
             valueLength = in.readInt();
 
             byte[] key = new byte[keyLength];
             in.readFully(key);
-            if (!Arrays.equals(key, searchKey)) {
-                // Skip the value if the key doesn't match
-                in.skipBytes(valueLength);
+
+            cmp = KEY_COMPARATOR.compare(key, searchKey);
+            if (cmp == 0) {
+                byte[] value = new byte[valueLength];
+                in.readFully(value);
+                return value;
+            }
+            if (cmp > 0) {
+                // Records are sorted; we've passed the point where searchKey would be.
                 return null;
             }
-
-            byte[] value = new byte[valueLength];
-            in.readFully(value);
-
-            return value;
-        } catch (EOFException e) {
-            // Handle partial/torn writes at the end of the file gracefully
-            System.err.println("Warning: Encountered truncated record at the end of WAL file.");
-            return null;
+            // key < searchKey: skip the value and continue scanning.
+            in.readFully(new byte[valueLength]);
         }
     }
 
-    public synchronized byte[] pointSearch(byte[] searchKey) throws IOException {
+    public byte[] pointSearch(byte[] searchKey) {
         try {
-            int searchKeyLength = searchKey.length;
-            byte[] result = null;
-            while (true) {
-                result = search(searchKey, searchKeyLength);
-                if (result != null) {
-                    break;
-                }
-            }
-            return result; // Replace with actual implementation
+            return search(searchKey, searchKey.length);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
     }
 
     @Override
