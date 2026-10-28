@@ -47,7 +47,7 @@ public class StorageEngineTest {
         WALWriter walWriter = new WALWriter(walPath);
         SSTTableWriter sstTableWriter = new SSTTableWriter(sstablePath);
         SSTTableReaderManager sstTableReaderManager = new SSTTableReaderManager(sstablePath);
-        StorageEngine storageEngine = new StorageEngine(walWriter, sstTableWriter, sstTableReaderManager, 1024 * 1024);
+        StorageEngine storageEngine = new StorageEngine(walWriter, sstTableWriter, sstTableReaderManager, 256 * 1024);
         ExecutorService writerPool = Executors.newFixedThreadPool(8);
 
         StopWatch watch = new StopWatch();
@@ -71,11 +71,13 @@ public class StorageEngineTest {
             IO.println("Writer pool did not terminate in time.");
         }
 
+        storageEngine.awaitFlush();
+
         int sstableCount = countFiles(sstablePath, "sstable_*");
         int walCount = countFiles(walPath, "wal_*");
         IO.println("WAL files count: " + walCount + ", SSTable files count: " + sstableCount);
         Assertions.assertTrue(walCount > 0, "No WAL files created.");
-        Assertions.assertTrue(sstableCount > 0, "No SSTable files created.");
+        Assertions.assertTrue(sstableCount >= 2, "Expected multiple SSTable files, got " + sstableCount);
 
         // Bounded reader pool with back-pressure (CallerRunsPolicy) and error capture
         ConcurrentLinkedQueue<Throwable> errors = new ConcurrentLinkedQueue<>();
@@ -85,16 +87,16 @@ public class StorageEngineTest {
         watch.reset();
         watch.start();
 
-        // Sample reads: pick 10_000 keys uniformly at random from the written keyspace
-        // [0, TEST_SIZE)
+        // Sample reads uniformly across the whole keyspace so both active MemTable
+        // and flushed SSTable records are exercised.
         Random rnd = new Random(0);
-        final int SAMPLE_COUNT = 100;
+        final int SAMPLE_COUNT = 500;
         for (int s = 0; s < SAMPLE_COUNT; s++) {
-            final int idx = rnd.nextInt(100); // 0.TEST_SIZE-1
-            IO.println(idx);
+            final int idx = rnd.nextInt(TEST_SIZE);
             readerPool.submit(() -> {
                 try {
-                    String got = new String(storageEngine.get(("key" + idx).getBytes()), StandardCharsets.UTF_8);
+                    byte[] bytes = storageEngine.get(("key" + idx).getBytes());
+                    String got = bytes == null ? null : new String(bytes, StandardCharsets.UTF_8);
                     if (!("value" + idx).equals(got)) {
                         errors.add(new AssertionError("Incorrect value read for key" + idx + ", got=" + got));
                     }

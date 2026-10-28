@@ -1,6 +1,8 @@
 package com.projects.rabey;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class SSTTableReaderManager {
@@ -11,13 +13,20 @@ public class SSTTableReaderManager {
         this.sstableDirPath = sstableDirPath;
     }
 
-    public byte[] get(byte[] searchKey, int currentIndex) throws IOException {
-        for (int i = currentIndex; i >= 1; i--) {
-            try (SSTTableReader reader = new SSTTableReader(getSSTableFileName(i))) {
+    public byte[] get(byte[] searchKey, int lastDurableIndex) throws IOException {
+        for (int i = lastDurableIndex; i >= 1; i--) {
+            Path sstablePath = getSSTableFileName(i);
+            if (!Files.exists(sstablePath)) {
+                // Gaps are expected when a flush failed; skip rather than abort the lookup.
+                continue;
+            }
+            try (SSTTableReader reader = new SSTTableReader(sstablePath)) {
                 byte[] result = reader.pointSearch(searchKey);
                 if (result != null) {
                     return result;
                 }
+            } catch (FileNotFoundException e) {
+                // The file disappeared between the existence check and opening it.
             }
         }
         return null;
